@@ -22,6 +22,8 @@ This repository hosts a modified version of Dommel. The primary trunk does not s
 OleDB \ Access databases (positional parameters). The ISqlBuilder provided a way to hook in
 an Insert Query provider, but Update Queries were still unsupported.
 
+My completed [Access Database Provider is available here](https://github.com/jmreynolds/Dommel-Access)
+
 ### IUpdateBuilder
 
 This project adds in an IUpdateBuilder, as an addition to the ISqlBuilder.
@@ -87,7 +89,7 @@ and we all know that [Naming Things is **HARD**](https://drupalize.me/blog/20130
 
 <hr>
 
-## Credit
+## Credit and Links
 
 Obviously, the main credit here goes 
 to [Henk Mollema](https://github.com/henkmollema) - He is the maintainer 
@@ -97,3 +99,5 @@ I'm just piggy-backing on his stuff.
 The other big acknowledgement goes to StackExchange for the 
 actual [Dapper](https://github.com/StackExchange/dapper-dot-net) library.
 It's pretty freaking great.
+
+Finally - My Access Data Provider is going to be on NuGet soon, but is currently available on GitHub [here](https://github.com/jmreynolds/Dommel-Access)
