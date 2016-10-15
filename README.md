@@ -1,149 +1,103 @@
 # Dommel
-Simple CRUD operations for Dapper.
+A modified version of [Dommel](https://github.com/henkmollema/Dommel) - provides some extension hooks for Update Queries, 
+similar to those provided by Dommel for Insert Queries.
+
+Dommel is a Dapper extension which provides simple CRUD operations.
 
 <hr>
 
-| Windows | Linux | OS X |
-| --- | --- | --- |
-| [![Build status](https://ci.appveyor.com/api/projects/status/kynsbfu97f9s5bj7?svg=true)](https://ci.appveyor.com/project/henkmollema/dommel) | [![Build Status](https://travis-ci.org/henkmollema/Dommel.svg)](https://travis-ci.org/henkmollema/Dommel) | [![Build Status](https://travis-ci.org/henkmollema/Dommel.svg)](https://travis-ci.org/henkmollema/Dommel) |
+Dommel provides a convenient API for CRUD operations using extension methods on the 
+`IDbConnection` interface. The SQL queries are generated based on your POCO entities. 
+Dommel also supports LINQ expressions which are being translated to SQL expressions. 
+[Dapper](https://github.com/StackExchange/dapper-dot-net) is used for query execution 
+and object mapping.
 
---
+Dommel also provides extensibility points to change the bevahior of resolving table names, 
+column names, the key property and POCO properties. 
+See [Extensibility](https://github.com/henkmollema/Dommel#extensibility) for more details.
 
-Dommel provides a convenient API for CRUD operations using extension methods on the `IDbConnection` interface. The SQL queries are generated based on your POCO entities. Dommel also supports LINQ expressions which are being translated to SQL expressions. [Dapper](https://github.com/StackExchange/dapper-dot-net) is used for query execution and object mapping.
+## Modifications
 
-Dommel also provides extensibility points to change the bevahior of resolving table names, column names, the key property and POCO properties. See [Extensibility](https://github.com/henkmollema/Dommel#extensibility) for more details.
+This repository hosts a modified version of Dommel. The primary trunk does not support 
+OleDB \ Access databases (positional parameters). The ISqlBuilder provided a way to hook in
+an Insert Query provider, but Update Queries were still unsupported.
+
+My completed [Access Database Provider is available here](https://github.com/jmreynolds/Dommel-Access)
+
+### IUpdateBuilder
+
+This project adds in an IUpdateBuilder, as an addition to the ISqlBuilder.
+
+```csharp
+        public interface IUpdateBuilder
+        {
+            string BuildUpdate(string tableName, PropertyInfo[] typeProperties, PropertyInfo keyProperty);
+        }
+```
+
+If you **DON'T** implement this Interface, that's ok. 
+
+```csharp
+        private static IUpdateBuilder GetUpdateBuilder(IDbConnection connection)
+        {
+            var connectionName = connection.GetType().Name.ToLower();
+            IUpdateBuilder builder;
+            return _updateBuilders.TryGetValue(connectionName, out builder) ? builder : new DefaultUpdateBuilder();
+        }
+```
+
+`GetUpdateBuilder` will return the `DefaultUpdateBuilder` if nothing else is defined or appropriate.
+
+On the other hand, in your own project, you can implement something like this:
+
+```csharp
+    public sealed class AccessUpdateBuilder : DommelMapper.IUpdateBuilder
+    {
+        public string BuildUpdate(string tableName, PropertyInfo[] typeProperties, PropertyInfo keyProperty)
+        {
+            var columnNames = typeProperties.Select(p => $"{DommelMapper.Resolvers.Column(p)} = ?{p.Name}?").ToArray();
+            return $"update {tableName} set {string.Join(", ", columnNames)} where {DommelMapper.Resolvers.Column(keyProperty)} = ?{keyProperty.Name}?";
+        }
+    }
+```
+
+### AddSqlUpdateBuilder
+
+And then call `DommelMapper.AddSqlUpdateBuilder(typeof(AccessDbConnection), new AccessUpdateBuilder());`
+
+This will register the Connection and the UpdateSqlBuilder.
+
+### AddBuilders
+
+Finally - there is another method: `AddBuilders(Type connectionType, ISqlBuilder sqlBuilder, IUpdateBuilder updateBuilder)`
+
+This is useful if you have implemented both an Insert *and* an Update (and that seems likely).
 
 <hr>
 
 ### Download
-[![Download Dommel on NuGet](http://i.imgur.com/g9ZIbID.png "Download Dommel on NuGet")](https://www.nuget.org/packages/Dommel)
+
+Currently, I don't have this packaged as a Nuget file. 
+I probably will soon... 
+But there's a things I want to do first
+
+1) Make sure I have the Dommel-Access package ready to go as well
+2) Try to get my changes accepted into the main trunk 
+(we don't **really** need two versions of the same thing floating around
+3) If not accepted fairly quickly, then come up with a new project name - 
+and we all know that [Naming Things is **HARD**](https://drupalize.me/blog/201301/naming-things-hard)
 
 <hr>
 
-### The API
+## Credit and Links
 
-##### Retrieving entities by id
-```csharp
-using (var con = new SqlConnection())
-{
-   var product = con.Get<Product>(1);
-}
-```
+Obviously, the main credit here goes 
+to [Henk Mollema](https://github.com/henkmollema) - He is the maintainer 
+and author of the original Dommel library.
+I'm just piggy-backing on his stuff.
 
-##### Retrieving all entities in a table
-```csharp
-using (var con = new SqlConnection())
-{
-   var products = con.GetAll<Product>().ToList();
-}
-```
+The other big acknowledgement goes to StackExchange for the 
+actual [Dapper](https://github.com/StackExchange/dapper-dot-net) library.
+It's pretty freaking great.
 
-##### Selecting entities using a predicate
-Dommel allows you to specify a predicate which is being translated into a SQL expression. The arguments in the lambda expression are added as parameters to the command.
-```csharp
-using (var con = new SqlConnection())
-{
-   var products = con.Select<Product>(p => p.Name == "Awesome bike");
-   
-   var products = con.Select<Product>(p => p.Created < new DateTime(2014, 12, 31) && p.InStock > 5);
-}
-```
-
-##### Inserting entities
-```csharp
-using (var con = new SqlConnection())
-{
-   var product = new Product { Name = "Awesome bike", InStock = 4 };
-   int id = con.Insert(product);
-}
-```
-
-##### Updating entities
-```csharp
-using (var con = new SqlConnection())
-{
-   var product = con.Get<Product>(1);
-   product.LastUpdate = DateTime.Now;
-   con.Update(product);
-}
-```
-
-##### Removing entities
-```csharp
-using (var con = new SqlConnection())
-{
-   var product = con.Get<Product>(1);
-   con.Delete(product);
-}
-```
-
-<hr>
-
-### Query builders
-
-Dommel supports building specialized queries for a certain RDBMS. By default, query builders for the following RDMBS are included: SQL Server, SQL Server CE, SQLite, MySQL and Postgres. The query builder to be used is determined by the connection type. To add or overwrite an existing query builder, use the `AddSqlBuilder()`  method:
-
-```csharp
-DommelMapper.AddSqlBuilder(typeof(SqlConnection), new CustomSqlBuilder());
-```
-
-<hr>
-
-### Extensibility
-##### `ITableNameResolver`
-Implement this interface if you want to customize the resolving of table names when building SQL queries.
-```csharp
-public class CustomTableNameResolver : DommelMapper.ITableNameResolver
-{
-    public string ResolveTableName(Type type)
-    {
-        // Every table has prefix 'tbl'.
-        return "tbl" + type.Name;
-    }
-}
-```
-
-Use the `SetTableNameResolver()` method to register the custom implementation:
-```csharp
-DommelMapper.SetTableNameResolver(new CustomTableNameResolver());
-```
-
-##### `IKeyPropertyResolver`
-Implement this interface if you want to customize the resolving of the key property of an entity. By default, Dommel will search for a property with the `[Key]` attribute, or a column with the name 'Id'.
-
-If you, for example, have the naming convention of `{TypeName}Id` for key properties, you would implement the `IKeyPropertyResolver` like this:
-```csharp
-public class CustomKeyPropertyResolver : DommelMapper.IKeyPropertyResolver
-{
-    public PropertyInfo ResolveKeyProperty(Type type)
-    {
-        return type.GetProperties().Single(p => p.Name == string.Format("{0}Id", type.Name));
-    }
-}
-```
-
-Use the `SetKeyPropertyResolver()` method to register the custom implementation:
-```csharp
-DommelMapper.SetKeyPropertyResolver(new CustomKeyPropertyResolver());
-```
-
-##### `IColumnNameResolver`
-Implement this interface if you want to customize the resolving of column names for when building SQL queries. This is useful when your naming conventions for database columns are different than your POCO properties.
-
-```csharp
-public class CustomColumnNameResolver : DommelMapper.IColumnNameResolver
-{
-    public string ResolveColumnName(PropertyInfo propertyInfo)
-    {
-        // Every column has prefix 'fld' and is uppercase.
-        return "fld" + propertyInfo.Name.ToUpper();
-    }
-}
-```
-
-Use the `SetColumnNameResolver()` method to register the custom implementation:
-```csharp
-DommelMapper.SetColumnNameResolver(new CustomColumnNameResolver());
-```
-
-The [Dapper.FluentMap.Dommel](https://www.nuget.org/packages/Dapper.FluentMap.Dommel) extension implements these interfaces using the configured mapping. Also see: [Dapper.FluentMap](https://github.com/HenkMollema/Dapper-FluentMap#dommel).
+Finally - My Access Data Provider is going to be on NuGet soon, but is currently available on GitHub [here](https://github.com/jmreynolds/Dommel-Access)
