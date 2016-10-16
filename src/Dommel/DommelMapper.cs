@@ -21,7 +21,9 @@ namespace Dommel
                                                                                     { "npgsqlconnection", new PostgresSqlBuilder() },
                                                                                     { "mysqlconnection", new MySqlSqlBuilder() }
                                                                                 };
-
+        private static readonly IDictionary<string, IUpdateBuilder> _updateBuilders = new Dictionary<string, IUpdateBuilder>
+        {
+        };
         // Query cache
         private static readonly IDictionary<Type, string> _getQueryCache = new Dictionary<Type, string>();
         private static readonly IDictionary<Type, string> _getAllQueryCache = new Dictionary<Type, string>();
@@ -565,9 +567,9 @@ namespace Dommel
                 var keyProperty = Resolvers.KeyProperty(type);
                 var typeProperties = Resolvers.Properties(type).Where(p => p != keyProperty).ToList();
 
-                var columnNames = typeProperties.Select(p => $"{Resolvers.Column(p)} = @{p.Name}").ToArray();
 
-                sql = $"update {tableName} set {string.Join(", ", columnNames)} where {Resolvers.Column(keyProperty)} = @{keyProperty.Name}";
+                var builder = GetUpdateBuilder(connection);
+                sql = builder.BuildUpdate(tableName, typeProperties, keyProperty);
 
                 _updateQueryCache[type] = sql;
             }
